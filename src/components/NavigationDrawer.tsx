@@ -1,12 +1,12 @@
 import React from 'react';
-import { Folder, CheckSquare, Clock, X, LayoutGrid, BarChart3 } from 'lucide-react';
+import { Folder, CheckSquare, Clock, X, LayoutGrid, BarChart3, Layers } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface NavigationDrawerProps {
   isOpen: boolean;
   onClose: () => void;
-  currentScreen: 'home' | 'projects' | 'tasks' | 'reports';
-  setScreen: (screen: 'home' | 'projects' | 'tasks' | 'reports') => void;
+  currentScreen: 'home' | 'projects' | 'tasks' | 'reports' | 'flutter';
+  setScreen: (screen: 'home' | 'projects' | 'tasks' | 'reports' | 'flutter') => void;
 }
 
 export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
@@ -20,6 +20,7 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
     { id: 'projects', label: 'Projects', icon: Folder },
     { id: 'tasks', label: 'Tasks', icon: CheckSquare },
     { id: 'reports', label: 'Reports & Visuals', icon: BarChart3 },
+    { id: 'flutter', label: 'Flutter Core Hub', icon: Layers },
   ] as const;
 
   return (
@@ -93,8 +94,9 @@ export const NavigationDrawer: React.FC<NavigationDrawerProps> = ({
             </nav>
 
             {/* Footer */}
-            <div className="p-4 border-t border-slate-100 bg-slate-50/20 text-[10px] text-slate-400 text-center font-mono">
-              CHRONOS • v1.1.2_HD
+            <div className="p-4 border-t border-slate-100 bg-slate-50/20 text-[10px] text-slate-400 text-center font-mono space-y-1">
+              <div>CHRONOS • v1.1.2_HD</div>
+              <div className="text-indigo-650 font-bold">Written by Brian McCarthy</div>
             </div>
           </motion.div>
         </>

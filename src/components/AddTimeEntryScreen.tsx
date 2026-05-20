@@ -257,6 +257,12 @@ export const AddTimeEntryScreen: React.FC<AddTimeEntryProps> = ({ onBack }) => {
             </div>
           </form>
         </div>
+
+        {/* Written By Brian McCarthy Screen Footer Info */}
+        <div className="text-center py-4 space-y-1 mt-6">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">ChronosSync HD Platform</p>
+          <p className="text-[11px] font-bold text-indigo-650">Written by Brian McCarthy</p>
+        </div>
       </main>
     </div>
   );

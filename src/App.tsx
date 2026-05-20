@@ -10,11 +10,12 @@ import { AddTimeEntryScreen } from './components/AddTimeEntryScreen';
 import { ProjectManagementScreen } from './components/ProjectManagementScreen';
 import { TaskManagementScreen } from './components/TaskManagementScreen';
 import { ReportsScreen } from './components/ReportsScreen';
+import { FlutterBlueprintsScreen } from './components/FlutterBlueprintsScreen';
 import { NavigationDrawer } from './components/NavigationDrawer';
 import { Sparkles, Smartphone, Laptop, RefreshCw } from 'lucide-react';
 
 export default function App() {
-  const [screen, setScreen] = useState<'home' | 'projects' | 'tasks' | 'add_entry' | 'reports'>('home');
+  const [screen, setScreen] = useState<'home' | 'projects' | 'tasks' | 'add_entry' | 'reports' | 'flutter'>('home');
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isMobileFrame, setIsMobileFrame] = useState(true);
 
@@ -70,6 +71,12 @@ export default function App() {
       case 'reports':
         return (
           <ReportsScreen
+            onOpenDrawer={() => setIsDrawerOpen(true)}
+          />
+        );
+      case 'flutter':
+        return (
+          <FlutterBlueprintsScreen
             onOpenDrawer={() => setIsDrawerOpen(true)}
           />
         );

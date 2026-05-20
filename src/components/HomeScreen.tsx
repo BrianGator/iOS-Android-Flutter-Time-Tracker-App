@@ -335,6 +335,12 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
         )}
       </main>
 
+      {/* Written By Brian McCarthy Screen Footer Info */}
+      <div className="text-center py-4 space-y-1 bg-white border-t border-slate-150 shrink-0">
+        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">ChronosSync HD Platform</p>
+        <p className="text-[11px] font-bold text-indigo-650">Written by Brian McCarthy</p>
+      </div>
+
       {/* Floating Action Button (FAB) - Styled nicely */}
       <button
         id="btn-add-time-entry-fab"
