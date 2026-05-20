@@ -1,0 +1,6 @@
+{
+  "name": "iOS-Android-Flutter-Time-Tracker-App",
+  "description": "An elegant, full-featured time tracking application with project management, task tracking, reporting, analytics, local storage state persistence, and beautiful data visualization charts.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
