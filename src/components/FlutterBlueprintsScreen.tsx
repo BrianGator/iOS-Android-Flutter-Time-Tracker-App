@@ -29,9 +29,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   provider: ^6.1.2
   shared_preferences: ^2.2.2
-  fl_chart: ^0.66.0
   intl: ^0.19.0
-  csv: ^6.0.0
 
 dev_dependencies:
   flutter_test:
@@ -42,95 +40,8 @@ flutter:
   uses-material-design: true
 `
     },
-    'main.dart': {
-      desc: 'Application bootstrap, state providers, and deep theme configuration',
-      syntax: 'dart',
-      code: `// Written by Brian McCarthy
-import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart';
-import 'package:provider/provider.dart';
-import 'providers/time_entry_provider.dart';
-import 'screens/home_screen.dart';
-
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  final provider = TimeEntryProvider();
-  await provider.loadLocalData();
-  
-  runApp(
-    ChangeNotifierProvider(
-      create: (_) => provider,
-      child: const ChronosApp(),
-    ),
-  );
-}
-
-class ChronosApp extends StatelessWidget {
-  const ChronosApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'ChronosSync',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF6366F1),
-          brightness: Brightness.light,
-          background: const Color(0xFFF3F4F6),
-        ),
-        useMaterial3: true,
-        fontFamily: 'Inter',
-      ),
-      home: const MainLayoutScreen(),
-    );
-  }
-}
-
-class MainLayoutScreen extends StatefulWidget {
-  const MainLayoutScreen({super.key});
-
-  @override
-  State<MainLayoutScreen> createState() => _MainLayoutScreenState();
-}
-
-class _MainLayoutScreenState extends State<MainLayoutScreen> {
-  int _currentIndex = 0;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
-        children: const [
-          HomeScreen(),
-          // Placeholder screens for full compilation representation
-          Center(child: Text('Projects Screen')),
-          Center(child: Text('Tasks Screen')),
-          Center(child: Text('Reports & Visuals Screen')),
-        ],
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-        onDestinationSelected: (idx) {
-          setState(() {
-            _currentIndex = idx;
-          });
-        },
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.timer), label: 'Entries'),
-          NavigationDestination(icon: Icon(Icons.folder), label: 'Projects'),
-          NavigationDestination(icon: Icon(Icons.task_alt), label: 'Tasks'),
-          NavigationDestination(icon: Icon(Icons.bar_chart), label: 'Reports'),
-        ],
-      ),
-    );
-  }
-}
-`
-    },
     'time_entry_provider.dart': {
-      desc: 'Scoped ChangeNotifier managing records and auto local key-value saving',
+      desc: 'State manager implementing empty initialization list and full SharedPreferences persistence for Projects, Tasks and TimeEntries',
       syntax: 'dart',
       code: `// Written by Brian McCarthy
 import 'dart:convert';
@@ -140,13 +51,21 @@ import 'package:shared_preferences/shared_preferences.dart';
 class Project {
   final String id;
   final String name;
+
   Project({required this.id, required this.name});
+
+  Map<String, dynamic> toJson() => {'id': id, 'name': name};
+  factory Project.fromJson(Map<String, dynamic> json) => Project(id: json['id'], name: json['name']);
 }
 
 class Task {
   final String id;
   final String name;
+
   Task({required this.id, required this.name});
+
+  Map<String, dynamic> toJson() => {'id': id, 'name': name};
+  factory Task.fromJson(Map<String, dynamic> json) => Task(id: json['id'], name: json['name']);
 }
 
 class TimeEntry {
@@ -186,6 +105,7 @@ class TimeEntry {
 }
 
 class TimeEntryProvider extends ChangeNotifier {
+  // 5: Initialized as empty lists
   List<Project> _projects = [];
   List<Task> _tasks = [];
   List<TimeEntry> _entries = [];
@@ -194,135 +114,916 @@ class TimeEntryProvider extends ChangeNotifier {
   List<Task> get tasks => _tasks;
   List<TimeEntry> get entries => _entries;
 
+  TimeEntryProvider() {
+    loadLocalData();
+  }
+
+  // 5: Data persistence using SharedPreferences for loading
   Future<void> loadLocalData() async {
     final prefs = await SharedPreferences.getInstance();
     
-    // Seed initial demo data if empty
-    final entriesJson = prefs.getString('time_entries');
+    final projectsJson = prefs.getString('projects_db');
+    if (projectsJson != null) {
+      final List decoded = jsonDecode(projectsJson);
+      _projects = decoded.map((item) => Project.fromJson(item)).toList();
+    } else {
+      // Seed default projects if none present
+      _projects = [
+        Project(id: 'p1', name: 'Internal R&D'),
+        Project(id: 'p2', name: 'Mobile App Setup'),
+      ];
+    }
+
+    final tasksJson = prefs.getString('tasks_db');
+    if (tasksJson != null) {
+      final List decoded = jsonDecode(tasksJson);
+      _tasks = decoded.map((item) => Task.fromJson(item)).toList();
+    } else {
+      // Seed default tasks if none present
+      _tasks = [
+        Task(id: 't1', name: 'UI & Layout Designing'),
+        Task(id: 't2', name: 'State Coding & API'),
+      ];
+    }
+
+    final entriesJson = prefs.getString('time_entries_db');
     if (entriesJson != null) {
       final List decoded = jsonDecode(entriesJson);
       _entries = decoded.map((item) => TimeEntry.fromJson(item)).toList();
     } else {
-      // Demo mock logs setup
-      _entries = [];
+      _entries = []; // Defaults to an empty list
     }
     notifyListeners();
   }
 
-  Future<void> saveToPreferences() async {
+  // 5: Data persistence using SharedPreferences for saving
+  Future<void> saveLocalData() async {
     final prefs = await SharedPreferences.getInstance();
-    final String encoded = jsonEncode(_entries.map((e) => e.toJson()).toList());
-    await prefs.setString('time_entries', encoded);
+    
+    final String projectsEncoded = jsonEncode(_projects.map((p) => p.toJson()).toList());
+    await prefs.setString('projects_db', projectsEncoded);
+
+    final String tasksEncoded = jsonEncode(_tasks.map((t) => t.toJson()).toList());
+    await prefs.setString('tasks_db', tasksEncoded);
+
+    final String entriesEncoded = jsonEncode(_entries.map((e) => e.toJson()).toList());
+    await prefs.setString('time_entries_db', entriesEncoded);
   }
 
+  // Project utilities
+  void addProject(Project project) {
+    _projects.add(project);
+    saveLocalData();
+    notifyListeners();
+  }
+
+  void deleteProject(String id) {
+    _projects.removeWhere((p) => p.id == id);
+    _entries.removeWhere((e) => e.projectId == id); // Cascade delete logs
+    saveLocalData();
+    notifyListeners();
+  }
+
+  // Task utilities
+  void addTask(Task task) {
+    _tasks.add(task);
+    saveLocalData();
+    notifyListeners();
+  }
+
+  void deleteTask(String id) {
+    _tasks.removeWhere((t) => t.id == id);
+    _entries.removeWhere((e) => e.taskId == id); // Cascade delete logs
+    saveLocalData();
+    notifyListeners();
+  }
+
+  // TimeEntry utilities
   void addTimeEntry(TimeEntry entry) {
     _entries.add(entry);
-    saveToPreferences();
+    saveLocalData();
     notifyListeners();
   }
 
   void deleteTimeEntry(String id) {
     _entries.removeWhere((element) => element.id == id);
-    saveToPreferences();
+    saveLocalData();
     notifyListeners();
+  }
+
+  String getProjectName(String projectId) {
+    return _projects.firstWhere((p) => p.id == projectId, orElse: () => Project(id: '', name: 'Unknown Project')).name;
+  }
+
+  String getTaskName(String taskId) {
+    return _tasks.firstWhere((t) => t.id == taskId, orElse: () => Task(id: '', name: 'Unknown Task')).name;
   }
 }
 `
     },
-    'reports_screen.dart': {
-      desc: 'Reports screen using fl_chart for Pizza Pie/Bars and multi-column .CSV Exporters',
+    'home_screen.dart': {
+      desc: 'All Entries & Grouped Tabs, Empty-state panels, dynamic list tiles, swipe delete and Drawer Navigation',
       syntax: 'dart',
       code: `// Written by Brian McCarthy
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:fl_chart/fl_chart.dart';
-import 'package:csv/csv.dart';
-import 'package:intl/intl.dart';
-// Note: Requires path_provider & open_file or share_plus package to triggers native downloads on real systems
+import '../providers/time_entry_provider.dart';
+import 'add_time_entry_screen.dart';
+import 'project_management_screen.dart';
+import 'task_management_screen.dart';
 
-class ReportsScreen extends StatefulWidget {
-  const ReportsScreen({super.key});
-
-  @override
-  State<ReportsScreen> createState() => _ReportsScreenState();
-}
-
-class _ReportsScreenState extends State<ReportsScreen> {
-  DateTime _startDate = DateTime.now().subtract(const Duration(days: 30));
-  DateTime _endDate = DateTime.now();
-
-  void _exportToCsv(List<dynamic> logs) {
-    List<List<dynamic>> csvData = [
-      ["Date", "Project ID", "Task ID", "Duration (Hours)", "Notes", "Billable Rate ($60)"]
-    ];
-
-    for (var entry in logs) {
-      csvData.add([
-        entry.date,
-        entry.projectId,
-        entry.taskId,
-        entry.totalTime,
-        entry.notes,
-        "\$" + (entry.totalTime * 60).toStringAsFixed(2)
-      ]);
-    }
-
-    String csvStr = const ListToCsvConverter().convert(csvData);
-    // Use Flutter platform share_plus or file system writing options to save the file
-    // Written by Brian McCarthy
-  }
+class HomeScreen extends StatelessWidget {
+  const HomeScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final provider = Provider.of<TimeEntryProvider>(context);
+
+    // Helpers to calculate grouped lists
+    final groupedEntries = <String, List<TimeEntry>>{};
+    for (var entry in provider.entries) {
+      groupedEntries.putIfAbsent(entry.projectId, () => []).add(entry);
+    }
+
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF1F5F9),
+        appBar: AppBar(
+          title: const Text('ChronosSync Time Tracker', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          backgroundColor: Colors.white,
+          foregroundColor: const Color(0xFF0F172A),
+          elevation: 0.5,
+          bottom: const TabBar(
+            labelColor: Color(0xFF4F46E5),
+            unselectedLabelColor: Color(0xFF64748B),
+            indicatorColor: Color(0xFF4F46E5),
+            tabs: [
+              Tab(text: 'All Entries'),
+              Tab(text: 'Grouped by Projects'),
+            ],
+          ),
+        ),
+        // 1: Hamburger menu drawer with high fidelity items mapping correct routes
+        drawer: Drawer(
+          child: Column(
+            children: [
+              DrawerHeader(
+                decoration: const BoxDecoration(color: Color(0xFF0F172A)),
+                child: SizedBox(
+                  width: double.infinity,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const CircleAvatar(
+                        backgroundColor: Color(0xFF4F46E5),
+                        child: Text('C', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      ),
+                      const SizedBox(height: 12),
+                      const Text(
+                        'ChronosSync Mobile',
+                        style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Written by Brian McCarthy',
+                        style: TextStyle(color: Colors.indigo.shade200, fontSize: 10, fontWeight: FontWeight.bold),
+                      )
+                    ],
+                  ),
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.timer, color: Color(0xFF4F46E5)),
+                title: const Text('Time Entries', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                onTap: () {
+                  Navigator.pop(context);
+                },
+              ),
+              // 1: Navigate to Projects Management Screen
+              ListTile(
+                leading: const Icon(Icons.folder_open, color: Color(0xFF4F46E5)),
+                title: const Text('Projects', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                onTap: () {
+                  Navigator.pop(context); // Close Drawer
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ProjectManagementScreen()),
+                  );
+                },
+              ),
+              // 1: Navigate to Tasks Management Screen
+              ListTile(
+                leading: const Icon(Icons.assignment_turned_in, color: Color(0xFF4F46E5)),
+                title: const Text('Tasks', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                onTap: () {
+                  Navigator.pop(context); // Close Drawer
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const TaskManagementScreen()),
+                  );
+                },
+              ),
+              const Divider(),
+              const Spacer(),
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Text(
+                  'Written by Brian McCarthy',
+                  style: TextStyle(fontSize: 10, color: Colors.grey.shade500, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+        ),
+        body: TabBarView(
+          children: [
+            // TAB 1: ALL ENTRIES
+            provider.entries.isEmpty
+                // 1: Active display for Empty State UI in All Entries Tab
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24.0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.timer_outlined, size: 64, color: Colors.slate.shade300),
+                          const SizedBox(height: 16),
+                          const Text('No entries found', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Log decimal hours of work using the (+) button below.\\nWritten by Brian McCarthy.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 12, color: Colors.slate.shade400, fontWeight: FontWeight.medium),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                // 1: Scrollable List of All Logged Time Entries
+                : ListView.builder(
+                    padding: const EdgeInsets.all(12),
+                    itemCount: provider.entries.length,
+                    itemBuilder: (context, index) {
+                      final item = provider.entries[index];
+                      return Card(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        elevation: 0,
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12.0),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 5,
+                                height: 50,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF4F46E5),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      provider.getProjectName(item.projectId),
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      provider.getTaskName(item.taskId),
+                                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.slate.shade500),
+                                    ),
+                                    if (item.notes.isNotEmpty) ...[
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        item.notes,
+                                        style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: Colors.slate.shade400),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      )
+                                    ],
+                                  ],
+                                ),
+                              ),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, py: 4),
+                                    decoration: BoxDecoration(
+                                      color: Colors.indigo.shade50,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      '\${item.totalTime.toStringAsFixed(1)}h',
+                                      style: const TextStyle(color: Color(0xFF4F46E5), fontWeight: FontWeight.bold, fontSize: 12),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    item.date,
+                                    style: TextStyle(fontSize: 10, color: Colors.slate.shade400, fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(width: 4),
+                              // 1: Delete entry action
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+                                onPressed: () {
+                                  // Trigger deletion on provider
+                                  provider.deleteTimeEntry(item.id);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Time Entry deleted successfully.')),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+
+            // TAB 2: GROUPED BY PROJECTS
+            groupedEntries.isEmpty
+                // 1: Active display for Empty State UI in Grouped by Projects Tab
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24.0),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.folder_outlined, size: 64, color: Colors.slate.shade300),
+                          const SizedBox(height: 16),
+                          const Text('No grouped projects logged', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Logged workloads will automatically categorize themselves here.\\nWritten by Brian McCarthy.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 12, color: Colors.slate.shade400, fontWeight: FontWeight.medium),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                // 1: Tree diagram grouping list of details automatically
+                : ListView.builder(
+                    padding: const EdgeInsets.all(12),
+                    itemCount: groupedEntries.length,
+                    itemBuilder: (context, index) {
+                      final pId = groupedEntries.keys.elementAt(index);
+                      final list = groupedEntries[pId]!;
+                      final double sum = list.fold(0.0, (previous, element) => previous + element.totalTime);
+
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        elevation: 0,
+                        child: ExpansionTile(
+                          shape: const RoundedBorder(),
+                          title: Text(
+                            provider.getProjectName(pId),
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
+                          ),
+                          subtitle: Text(
+                            '\${list.length} log\${list.length == 1 ? "" : "s"} total',
+                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.slate.shade400),
+                          ),
+                          trailing: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, py: 5),
+                            decoration: BoxDecoration(color: const Color(0xFF0F172A), borderRadius: BorderRadius.circular(8)),
+                            child: Text(
+                              '\${sum.toStringAsFixed(1)} hrs',
+                              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 11),
+                            ),
+                          ),
+                          children: list.map((e) {
+                            return ListTile(
+                              dense: true,
+                              title: Text(provider.getTaskName(e.taskId), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                              subtitle: Text(e.date, style: const TextStyle(fontSize: 10)),
+                              trailing: Text('\${e.totalTime}h', style: TextStyle(color: Colors.grey.shade600, fontWeight: FontWeight.bold)),
+                            );
+                          }).toList(),
+                        ),
+                      );
+                    },
+                  ),
+          ],
+        ),
+        // Trigger Add New Entry controller and views
+        floatingActionButton: FloatingActionButton(
+          backgroundColor: const Color(0xFF4F46E5),
+          child: const Icon(Icons.add, color: Colors.white),
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const AddTimeEntryScreen()),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+`
+    },
+    'add_time_entry_screen.dart': {
+      desc: 'Form with Project and Task dropdowns mapped, validations and state save triggers',
+      syntax: 'dart',
+      code: `// Written by Brian McCarthy
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/time_entry_provider.dart';
+
+class AddTimeEntryScreen extends StatefulWidget {
+  const AddTimeEntryScreen({super.key});
+
+  @override
+  State<AddTimeEntryScreen> createState() => _AddTimeEntryScreenState();
+}
+
+class _AddTimeEntryScreenState extends State<AddTimeEntryScreen> {
+  final _formKey = GlobalKey<FormState>();
+  String? _selectedProjectId;
+  String? _selectedTaskId;
+  final TextEditingController _timeController = TextEditingController();
+  final TextEditingController _notesController = TextEditingController();
+  String _selectedDate = DateTime.now().toIso8601String().split('T')[0];
+
+  @override
+  Widget build(BuildContext context) {
+    // 2: Access data models securely from provider and inject dropdown streams
+    final provider = Provider.of<TimeEntryProvider>(context);
+
     return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('Flutter Reports & Charts'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.download),
-            onPressed: () => _exportToCsv([]),
+        title: const Text('Add Time Entry', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF0F172A),
+        elevation: 0.5,
+      ),
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'ChronosSync Data Logger\\nWritten by Brian McCarthy',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: Color(0xFF4F46E5)),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                Card(
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // 2: Project dropdown populated cleanly from Provider data
+                        const Text('Project', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF1E293B))),
+                        const SizedBox(height: 6),
+                        DropdownButtonFormField<String>(
+                          value: _selectedProjectId,
+                          hint: const Text('Select a project'),
+                          decoration: InputDecoration(
+                            fillColor: const Color(0xFFFAFBFD),
+                            filled: true,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          items: provider.projects.map((proj) {
+                            return DropdownMenuItem<String>(
+                              value: proj.id,
+                              child: Text(proj.name),
+                            );
+                          }).toList(),
+                          validator: (val) => val == null ? 'Please select a workspace project' : null,
+                          onChanged: (val) {
+                            setState(() {
+                              _selectedProjectId = val;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 16),
+
+                        // 2: Task dropdown populated cleanly from Provider data
+                        const Text('Task Scope', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF1E293B))),
+                        const SizedBox(height: 6),
+                        DropdownButtonFormField<String>(
+                          value: _selectedTaskId,
+                          hint: const Text('Select a task'),
+                          decoration: InputDecoration(
+                            fillColor: const Color(0xFFFAFBFD),
+                            filled: true,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          items: provider.tasks.map((tsk) {
+                            return DropdownMenuItem<String>(
+                              value: tsk.id,
+                              child: Text(tsk.name),
+                            );
+                          }).toList(),
+                          validator: (val) => val == null ? 'Please select a task workflow' : null,
+                          onChanged: (val) {
+                            setState(() {
+                              _selectedTaskId = val;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Time log Duration text input controller
+                        const Text('Logged Duration (Hours)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF1E293B))),
+                        const SizedBox(height: 6),
+                        TextFormField(
+                          controller: _timeController,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: InputDecoration(
+                            hintText: 'e.g. 2.5',
+                            fillColor: const Color(0xFFFAFBFD),
+                            filled: true,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                          validator: (val) {
+                            if (val == null || val.isEmpty) return 'Duration is required';
+                            final d = double.tryParse(val);
+                            if (d == null || d <= 0) return 'Please enter a valid positive decimal quantity';
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Work Logs Notes Inputs
+                        const Text('Work notes', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF1E293B))),
+                        const SizedBox(height: 6),
+                        TextFormField(
+                          controller: _notesController,
+                          maxLines: 2,
+                          decoration: InputDecoration(
+                            hintText: 'Enter log details optional',
+                            fillColor: const Color(0xFFFAFBFD),
+                            filled: true,
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        // In-app date limits selection field
+                        const Text('Logged Date', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF1E293B))),
+                        const SizedBox(height: 6),
+                        InkWell(
+                          onTap: () async {
+                            final pickedDate = await showDatePicker(
+                              context: context,
+                              initialDate: DateTime.now(),
+                              firstDate: DateTime(2025),
+                              lastDate: DateTime(2027),
+                            );
+                            if (pickedDate != null) {
+                              setState(() {
+                                _selectedDate = pickedDate.toIso8601String().split('T')[0];
+                              });
+                            }
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFAFBFD),
+                              border: Border.all(color: Colors.grey.shade400),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisAlignment: MainAxisAlignment.between,
+                              children: [
+                                Text(_selectedDate),
+                                const Icon(Icons.calendar_month, size: 18, color: Color(0xFF4F46E5)),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // 2: Form submission controller with save and validator pop callbacks
+                ElevatedButton(
+                  onPressed: () {
+                    if (_formKey.currentState!.validate()) {
+                      final generatedId = 'log_' + DateTime.now().millisecondsSinceEpoch.toString();
+                      final typedDouble = double.parse(_timeController.text.trim());
+
+                      final newLog = TimeEntry(
+                        id: generatedId,
+                        projectId: _selectedProjectId!,
+                        taskId: _selectedTaskId!,
+                        totalTime: typedDouble,
+                        date: _selectedDate,
+                        notes: _notesController.text.trim(),
+                      );
+
+                      // Save to SharedPreferences through provider
+                      provider.addTimeEntry(newLog);
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Time Entry saved successfully.')),
+                      );
+
+                      Navigator.pop(context); // Close the entry form
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF4F46E5),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: const Text('Save Entry', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+`
+    },
+    'project_management_screen.dart': {
+      desc: 'Screen monitoring project scopes, including scrollable lists, delete, and add new dialog using the (+) button',
+      syntax: 'dart',
+      code: `// Written by Brian McCarthy
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/time_entry_provider.dart';
+
+class ProjectManagementScreen extends StatelessWidget {
+  const ProjectManagementScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = Provider.of<TimeEntryProvider>(context);
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF1F5F9),
+      appBar: AppBar(
+        title: const Text('Manage Workspace Projects', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF0F172A),
+        elevation: 0.5,
+      ),
+      body: Column(
+        children: [
+          const SizedBox(height: 8),
+          const Text(
+            'Written by Brian McCarthy',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10, color: Color(0xFF4F46E5)),
+          ),
+          const SizedBox(height: 8),
+          // 3: List view tracking projects with cascading deletion logic built in
+          Expanded(
+            child: provider.projects.isEmpty
+                ? Center(
+                    child: Text(
+                      'No projects registered yet.\\nClick the (+) button to create one.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.slate.shade400, fontWeight: FontWeight.medium, fontSize: 12),
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.all(12),
+                    itemCount: provider.projects.length,
+                    itemBuilder: (context, index) {
+                      final proj = provider.projects[index];
+                      return Card(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        elevation: 0,
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: ListTile(
+                          leading: const CircleAvatar(
+                            backgroundColor: Color(0xFFEEF2FF),
+                            child: Icon(Icons.folder_open, color: Color(0xFF4F46E5), size: 18),
+                          ),
+                          title: Text(
+                            proj.name,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
+                          ),
+                          // 3: Immediate delete key binding inside item column
+                          trailing: IconButton(
+                            icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+                            onPressed: () {
+                              provider.deleteProject(proj.id);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Project deleted successfully.')),
+                              );
+                            },
+                          ),
+                        ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          children: [
-            const Text(
-              'Code Written by Brian McCarthy',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 11),
-            ),
-            const SizedBox(height: 16),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  children: [
-                    Text('Select Date Limits:'),
-                    ElevatedButton(
-                      child: Text('Export Companion Data Dataset (.CSV)'),
-                      onPressed: () {},
-                    )
-                  ],
+      // 3: Floating Action Button (+) implementing immediate Material Modal Add Dialog triggers
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: const Color(0xFF4F46E5),
+        child: const Icon(Icons.add, color: Colors.white),
+        // 3: Trigger Show dialog using the (+) FAB action
+        onPressed: () {
+          final textController = TextEditingController();
+
+          showDialog(
+            context: context,
+            builder: (ctx) {
+              return AlertDialog(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                title: const Text('Add Workspace Project', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                content: TextField(
+                  controller: textController,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Project Name',
+                    hintText: 'e.g., Client Syncing',
+                  ),
                 ),
-              ),
-            ),
-            const SizedBox(height: 24),
-            // SVG Equivalents: Rendering gorgeous interactive Bar charts
-            SizedBox(
-              height: 200,
-              child: BarChart(
-                BarChartData(
-                  barGroups: [
-                    BarChartGroupData(x: 0, barRods: [BarChartRodData(toY: 8.5, color: Colors.blue)]),
-                    BarChartGroupData(x: 1, barRods: [BarChartRodData(toY: 12.0, color: Colors.indigo)]),
-                  ],
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+                  ),
+                  ElevatedButton(
+                    onPressed: () {
+                      final enteredName = textController.text.trim();
+                      if (enteredName.isNotEmpty) {
+                        final newProj = Project(
+                          id: 'proj_' + DateTime.now().millisecondsSinceEpoch.toString(),
+                          name: enteredName,
+                        );
+                        provider.addProject(newProj);
+                        Navigator.pop(ctx);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('New project created!')),
+                        );
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5)),
+                    child: const Text('Create', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  )
+                ],
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+`
+    },
+    'task_management_screen.dart': {
+      desc: 'Screen monitoring task scopes, including scrollable lists, delete, and add new dialog using the (+) button',
+      syntax: 'dart',
+      code: `// Written by Brian McCarthy
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/time_entry_provider.dart';
+
+class TaskManagementScreen extends StatelessWidget {
+  const TaskManagementScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = Provider.of<TimeEntryProvider>(context);
+
+    return Scaffold(
+      backgroundColor: const Color(0xFFF1F5F9),
+      appBar: AppBar(
+        title: const Text('Manage Workflow Tasks', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+        backgroundColor: Colors.white,
+        foregroundColor: const Color(0xFF0F172A),
+        elevation: 0.5,
+      ),
+      body: Column(
+        children: [
+          const SizedBox(height: 8),
+          const Text(
+            'Written by Brian McCarthy',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 10, color: Color(0xFF4F46E5)),
+          ),
+          const SizedBox(height: 8),
+          // 4: List view tracking custom Tasks entries with cascading deletion logic built in
+          Expanded(
+            child: provider.tasks.isEmpty
+                ? Center(
+                    child: Text(
+                      'No tasks registered yet.\\nClick the (+) button to create one.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.slate.shade400, fontWeight: FontWeight.medium, fontSize: 12),
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.all(12),
+                    itemCount: provider.tasks.length,
+                    itemBuilder: (context, index) {
+                      final tsk = provider.tasks[index];
+                      return Card(
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        elevation: 0,
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: ListTile(
+                          leading: const CircleAvatar(
+                            backgroundColor: Color(0xFFF5F3FF),
+                            child: Icon(Icons.assignment_turned_in, color: Color(0xFF4F46E5), size: 18),
+                          ),
+                          title: Text(
+                            tsk.name,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0F172A)),
+                          ),
+                          // 4: Immediate delete key binding inside item column
+                          trailing: IconButton(
+                            icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+                            onPressed: () {
+                              provider.deleteTask(tsk.id);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Task deleted successfully.')),
+                              );
+                            },
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+      // 4: Floating Action Button (+) implementing immediate Material Modal Add Dialog triggers
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: const Color(0xFF4F46E5),
+        child: const Icon(Icons.add, color: Colors.white),
+        // 4: Trigger Show dialog using the (+) FAB action
+        onPressed: () {
+          final textController = TextEditingController();
+
+          showDialog(
+            context: context,
+            builder: (ctx) {
+              return AlertDialog(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                title: const Text('Add Workflow Task', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                content: TextField(
+                  controller: textController,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Task Name',
+                    hintText: 'e.g., Code Auditing',
+                  ),
                 ),
-              ),
-            ),
-          ],
-        ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Cancel', style: TextStyle(color: Color(0xFF64748B))),
+                  ),
+                  ElevatedButton(
+                    onPressed: () {
+                      final enteredName = textController.text.trim();
+                      if (enteredName.isNotEmpty) {
+                        final newTask = Task(
+                          id: 'task_' + DateTime.now().millisecondsSinceEpoch.toString(),
+                          name: enteredName,
+                        );
+                        provider.addTask(newTask);
+                        Navigator.pop(ctx);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('New task created!')),
+                        );
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF4F46E5)),
+                    child: const Text('Create', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  )
+                ],
+              );
+            },
+          );
+        },
       ),
     );
   }
